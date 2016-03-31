@@ -1,0 +1,192 @@
+---
+title: "EDA Project - Diamond Prices (Part 3)"
+author: "Toavina Andriamanerasoa"
+date: "31 March 2016"
+output: 
+  html_document:
+    theme: spacelab
+    highlight: tango
+---
+
+## Problem 1 - Create a histogram of diamond prices. Facet the histogram by diamon color and use cut to color the histogram bars
+
+```{r histogram of diamon prices, warnings = FALSE, message=FALSE}
+#install.packages(ggplot2) #<- Unquote if ggplot2 is not installed
+#install.packages(ggplot2) #<- Unquote if dplyr is not installed
+library(ggplot2)
+library(dplyr)
+data(diamonds)
+names(diamonds)
+
+ggplot(data = diamonds, aes(x = price, fill = cut))+
+  geom_histogram()+
+  facet_wrap(~color, scales = "free_y")+
+  scale_fill_brewer(type = 'qual', palette = 'Accent')+
+  scale_x_log10()
+```
+
+***
+
+## Problem 2 - Create a scatterplot of diamond price vs. table and color the points by the cut of the diamond
+
+```{r  ,warnings = FALSE}
+
+#Note - I'm not showing outliers in the chart
+ggplot(data = diamonds, aes(x = table, y = price, color = cut))+
+  geom_point(alpha = 1/2)+
+  scale_color_brewer(type = 'qual', palette = 'Accent')+
+  scale_x_continuous(limits=c(50,80), breaks = seq(50,80,2))
+```
+
+**Please note that for the answers below it was asked that the graph was used rather than running code**
+
+### What is the typical range for the majority of diamonds of **ideal** cut?
+53 and 57
+
+### What is the typical range for the majority of diamonds of **premium** cut?
+58 to 62
+
+***
+
+## Problem 3 -  Create a scatterplot of diamond price vs. volume (x,y,z) and color the points by the clarity of the diamonds. Use scale on the y-axis to take the log10 of price. You should also omit the top 1% of diamond volumes from the plot
+
+```{r}
+diamonds$volume <- with(diamonds, x*y*z)
+
+ggplot(data = subset(diamonds, volume < quantile(diamonds$volume, probs = 0.99)),
+       aes(x = volume, y = price, color = clarity))+
+  geom_point(alpha = 0.75)+
+  scale_y_continuous(trans = "log10")+
+  scale_color_brewer(type = 'div')
+```
+
+***
+
+## Problem 4 - Create a new variable called 'prop_initiated' in the Pseudo-Facebook data set. The variable should contain the proportion of friendships that the user initiated
+
+```{r}
+pf <- read.delim('pseudo_facebook.tsv')
+pf$prop_initiated <- pf$friendships_initiated / pf$friend_count
+```
+
+***
+
+## Problem 5 - Create a line graph of the median proportion of friendships initiated vs. tenure and color the line segment by year_joined.bucket
+
+```{r}
+# Create the year joined bucket variable
+pf$year_joined <- floor(2014 - pf$tenure/365)
+pf$year_joined.bucket <- cut(pf$year_joined, c(2004, 2009, 2011, 2012, 2014))
+
+ggplot(data = subset(pf, !is.na(prop_initiated)),
+       aes(x = tenure, y = prop_initiated))+
+  geom_line(stat = 'summary', fun.y = median, aes(color = year_joined.bucket))
+```
+
+***
+
+## Problem 6 - Smooth the last plot you created - you can bin together ranges of tenure or add a smoother to the plot
+```{r}
+ggplot(data = subset(pf, !is.na(prop_initiated)),
+       aes(x = 7*round(tenure/7), y = prop_initiated))+
+  geom_line(stat = 'summary', fun.y = median, aes(color = year_joined.bucket))
+```
+
+### On average, which group initiated the greatest proportion of its Facebook friendships? The plot with the smoother that you created in the last exercise can help you answer this question
+Per the plot, the most recent bucket, i.e. joined after 2012
+
+### For the group with the largest proportion of friendships initiated, what is the group's average (mean) proportion of friendships initiated?
+```{r}
+pf %>% 
+  select(year_joined.bucket, prop_initiated) %>% 
+  filter(!is.na(prop_initiated)) %>% 
+  group_by(year_joined.bucket) %>% 
+  summarise(average = mean(prop_initiated))
+```
+Per the output above, the mean for the relevant group's mean proportion of friendships initiated is c.66.5% 
+
+### Why do you think that they have a higher proportion of friendships initiated?
+Because users with more tenure typically have larger networks already, so will receive more inbound friend requests than those with less friends.
+
+***
+
+## Problem 7 - Create a scatter plot of the price/carat ratio of diamonds. The variable x should be assigned to cut. The points should be colored by diamond color, and the plot should be faceted by clarity
+
+```{r}
+ggplot(data = diamonds,
+       aes( x = cut, y = price / carat, color = color))+
+  geom_jitter()+
+  facet_wrap(~clarity)+
+  scale_color_brewer(type = 'div')
+```
+***
+
+## Gapminder data revisited - Examining additional variables
+
+
+# Step 1 - Load and tidy the data per previous exercise
+```{r}
+# Note - I'm assuming that the relevant libraries are already loaded by preceding code
+
+library(tidyr)
+
+## Load data into dataframes
+GDP <- read.csv("GDPpercapitaconstant2000US.csv")
+BMI <- read.csv("Indicator_BMI male ASM.csv")
+
+GDP <- tbl_df(GDP)
+BMI <- tbl_df(BMI)
+```
+
+```{r}
+## Tidy the BMI data by creating a date column
+BMI <- BMI %>%
+  gather(Year, value = BMI, -Country) %>% 
+  mutate(Year = as.numeric(substr(Year,2,5)))
+```
+
+```{r}
+## Tidy the GDP data by creating a data column
+GDP <- GDP %>%
+  rename(Country = Income.per.person..fixed.2000.US..) %>%
+    gather(Year, value = GDP, -Country) %>% 
+  mutate(Year = as.numeric(substr(Year,2,5)))
+```
+
+```{r}
+## Merge the data together
+BMI_GDP <- inner_join(BMI,GDP, by=c("Country","Year"))
+```
+
+```{r}
+## Delete empty observations
+BMI_GDP <- BMI_GDP %>% 
+  filter(!is.na(GDP))
+```
+
+## Step 2 - Plot BMI vs. GDP, color by country
+```{r}
+ggplot(data = BMI_GDP, aes(x = GDP, y = BMI, color = Country))+
+  geom_point(alpha = 1/2)+
+  theme(legend.position = "none")
+```
+It becomes apparent that there might be a specific relationship for each country.
+
+Here is the chart zooming on the lower GDP per capita country.
+```{r}
+ggplot(data = BMI_GDP, aes(x = GDP, y = BMI, color = Country))+
+  geom_point(alpha = 1/2)+
+  scale_x_continuous(breaks = c(0,70000,5000), limits = c(50,15000))+
+  theme(legend.position = "none")
+```
+
+
+Finally, here is the old chart transforming GDP using a log10 but adding coloring by country
+```{r}
+ggplot(data = BMI_GDP, aes(x = log10(GDP), y = BMI, color = Country))+
+  geom_point(alpha = 1/2)+
+  scale_x_continuous(breaks = c(0,70000,5000))+
+  geom_smooth(method = "lm", color = 'red')+
+  theme(legend.position = "none")
+```
+
